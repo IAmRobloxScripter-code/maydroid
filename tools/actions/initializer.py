@@ -22,8 +22,8 @@ def update_dbus_policy(args):
     service_name = f"id.waydro.Container.{instance_id}"
     
     candidates = [
-        "/usr/share/dbus-1/system.d/id.waydro.Container.conf",
         "/etc/dbus-1/system.d/id.waydro.Container.conf",
+        "/usr/share/dbus-1/system.d/id.waydro.Container.conf",
     ]
     policy_path = None
     for candidate in candidates:
@@ -32,27 +32,29 @@ def update_dbus_policy(args):
             break
     
     if policy_path is None:
-        logging.warning("Could not find D-Bus policy file, skipping policy update")
+        logging.warning("Could not find D-Bus policy file")
         return
-    
+
     tree = ET.parse(policy_path)
     root = tree.getroot()
-    
+
     for policy in root.findall("policy"):
         user = policy.get("user")
         context = policy.get("context")
-        
-        existing_own = [e.get("own") for e in policy.findall("allow")]
-        if user == "root" and service_name not in existing_own:
-            ET.SubElement(policy, "allow", own=service_name)
-        
-        existing_dest = [e.get("send_destination") for e in policy.findall("allow")]
-        if context == "default" and service_name not in existing_dest:
-            ET.SubElement(policy, "allow", send_destination=service_name)
-            ET.SubElement(policy, "allow", receive_sender=service_name)
-    
+
+        if user == "root":
+            existing = [e.get("own") for e in policy.findall("allow")]
+            if service_name not in existing:
+                ET.SubElement(policy, "allow", own=service_name)
+
+        if context == "default":
+            existing_dest = [e.get("send_destination") for e in policy.findall("allow")]
+            if service_name not in existing_dest:
+                ET.SubElement(policy, "allow", send_destination=service_name)
+                ET.SubElement(policy, "allow", receive_sender=service_name)
+
     tree.write(policy_path)
-    
+
     if tools.helpers.run.user(args, ["systemctl", "reload", "dbus-broker"], check=False) != 0:
         tools.helpers.run.user(args, ["systemctl", "reload", "dbus"], check=False)
 
